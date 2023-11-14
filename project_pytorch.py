@@ -10,12 +10,8 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, TensorDataset, random_split
 from sklearn.model_selection import train_test_split
-
-
-
-
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_theme()
@@ -65,88 +61,72 @@ dataset_nb = dataset_nb.apply(lambda x : x.cat.codes)
 dataset[dataset_nb.columns] = dataset_nb.copy()
 
 #Split into input and output
-datainput = dataset.iloc[:,0:9]
-dataoutput = dataset.iloc[:,9]
-dataoutput.head(1000)
+datainput = dataset.drop(columns=['stroke']) #all but stroke
+dataoutput = dataset['stroke']
 
-print(datainput.head(10))
+#Convert into tensors
+datainput = torch.tensor(datainput.values, dtype=torch.float32)
+dataoutput = torch.tensor(dataoutput.values, dtype=torch.float32)
 
+# Split into training and testing
+dataset = TensorDataset(datainput, dataoutput)
+train_len = int(0.8 * len(dataset))
+test_len = len(dataset) - train_len
+train_set, test_set = random_split(dataset, [train_len, test_len])
 
-# Split into input and output
-input_train, input_test, output_train, output_test = train_test_split(datainput, dataoutput, test_size=0.1, random_state=42)
 
 #Definition of NN
 class StrokePredict(nn.Module):
-  def __init__(self):
+  def __init__(self, input_size):
       super(StrokePredict, self).__init__()
-      self.fc1 = nn.Linear(input_size, 128)
+      self.fc1 = nn.Linear(input_size, 32)
       self.relu1 = nn.ReLU()
-      self.fc2 = nn.Linear(128, 64)
-      self.relu2 = nn.ReLU()
-      self.fc3 = nn.Linear(64, 1)
+      self.fc2 = nn.Linear(32, 1)
       self.sigmoid = nn.Sigmoid()
 
   def forward(self, x):
       x = self.fc1(x)
       x = self.relu1(x)
       x = self.fc2(x)
-      x = self.relu2(x)
-      x = self.fc3(x)
       x = self.sigmoid(x)
       return x
-#Definition of Dataset
-class StrokeDataset(torch.utils.data.Dataset):
-    def __init__(self, datainput, dataoutput):
-        self.datainput = datainput
-        self.dataoutput = dataoutput
 
-    def __len__(self):
-        return len(self.datainput)
+#Parameters
+num_epochs = 10
+batch_size = 32
+learning_rate=0.001
 
-    def __getitem__(self, idx):
-      if idx < 0 or idx >= len(self):
-        raise IndexError(f"Index {idx} is out of bounds for the dataset.")
-      return torch.Tensor(self.datainput.iloc[idx].values), torch.Tensor([self.dataoutput.iloc[idx]]).float()
-# Hyperparameters
-batch_size = 64
-input_size = datainput.shape[1]
-learning_rate = 0.001
-num_epochs = 20
+#Dataset loaders
+train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False)
 
-# Load dataset and create data loaders for training and testing
-train_dataset = StrokeDataset(input_train, output_train)
-test_dataset = StrokeDataset(input_test, output_test)
-
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-
-# Initialize the model, loss function, and optimizer
-model = StrokePredict()
+#Initialize  model, loss function, and optimizer
+model = StrokePredict(input_size=datainput.shape[1])
 criterion = nn.BCELoss()
-optimizer = optim.SGD(model.parameters(), lr=learning_rate)
+optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-# Training loop
+#Training loop
 for epoch in range(num_epochs):
-    for i, (images, labels) in enumerate(train_loader):
+    for datainput, dataoutput in train_loader:
         optimizer.zero_grad()
-        outputs = model(images)
-        loss = criterion(outputs, labels)
+        output = model(datainput)
+        loss = criterion(output, dataoutput.view(-1, 1))
         loss.backward()
         optimizer.step()
 
-    # Print training loss after each epoch
+    # Printing loss after each epoch
     print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}")
 
-# Evaluation loop (on the test set)
+#Evaluation loop
 model.eval()
 with torch.no_grad():
-    for i, (images, labels) in enumerate(test_loader):
-        predict = model(images)
-        predict_proba_batch = torch.sigmoid(predict).squeeze().tolist()
-        predict_proba = sum(predict_proba_batch) / len(predict_proba_batch)
+    correct = 0
+    total = 0
+    for testinput, testoutput in test_loader:
+        output = model(testinput)
+        predicted = (output > 0.5).float()
+        total += testoutput.size(0)
+        correct += (predicted == testoutput.view(-1, 1)).sum().item()
 
-        threshold = 0.5
-        predict_label = 1 if predict_proba > threshold else 0
-
-        print(f"Predicted Probability: {predict_proba}")
-        print(f"Predicted Label (0: No Stroke, 1: Stroke): {predict_label}")
+accuracy = correct / total
+print(f'Test Accuracy: {accuracy}')
