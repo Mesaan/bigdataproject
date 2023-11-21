@@ -10,21 +10,22 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
-from torch.utils.data import DataLoader, TensorDataset, random_split
+from torch.utils.data import DataLoader,TensorDataset,random_split
 from sklearn.model_selection import train_test_split
 import warnings
 warnings.filterwarnings('ignore')
 sns.set_theme()
 
+#----------Import and adjust dataset----------
+
 raw_data = pd.read_csv('healthcare-dataset-stroke-data.csv')
 dataset = raw_data.drop(columns=['ever_married','Residence_type'])
 dataset = dataset.dropna()
 
-#Inspect data
+#Check data
 dataset.head(10)
 dataset.columns
 dataset.describe().T
-dataset.info()
 
 #Adjust data type for string ones
 dataset['gender'] = dataset['gender'].astype('string')
@@ -36,10 +37,13 @@ dataset.info()
 columns=[i.lower() for i in dataset.columns]
 dataset.columns=columns
 
+
+#----------Visualize dataset----------
+
 #Add weight status group variable to dataset for datavis
 dataset["weight"]=["underweight" if each <18.5 else "normal" if (each>18.5 and each<24.9) else "overweight" if (each>25 and each<29.9) else "obese" if (each>30) else "nan" for each in dataset.bmi]
 
-#Histogram datavisualisation of ppl w strokes
+#Histogram datavis of ppl w strokes - age, bmi
 stroke_data = dataset[dataset['stroke'] == 1]
 def plot_hist(variable):
     plt.figure(figsize=(9,3))
@@ -48,10 +52,20 @@ def plot_hist(variable):
     plt.ylabel("Frequency")
     plt.title(f"{variable} histogram distribution")
     plt.show()
-numerical=["age","bmi","weight"]
+numerical=["age","bmi"]
 
 for i in numerical:
     plot_hist(i)
+
+#Pie chart datavis - weight
+weights = dataset['weight'].value_counts()
+plt.figure(figsize=(3, 3))
+plt.pie(weights, labels=weights.index, autopct='%1.1f%%', startangle=140)
+plt.title('Weight pie chart')
+plt.show()
+
+
+#----------Convert dataset into NN----------
 
 #Convert the data to numerical to use it in NN
 dataset = dataset.drop(columns=['weight'])
@@ -73,7 +87,6 @@ dataset = TensorDataset(datainput, dataoutput)
 train_len = int(0.8 * len(dataset))
 test_len = len(dataset) - train_len
 train_set, test_set = random_split(dataset, [train_len, test_len])
-
 
 #Definition of NN
 class StrokePredict(nn.Module):
