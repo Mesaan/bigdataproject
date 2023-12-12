@@ -1,5 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 #----------Import and adjust dataset----------
@@ -52,4 +53,27 @@ plt.bar(month_avg.index, month_avg['precipitation'], color='blue', alpha=0.7)
 plt.title('Average rain per month in 2014 in London')
 plt.xlabel('Month')
 plt.ylabel('Precipitation')
+plt.show()
+
+#Sun
+plt.figure(figsize=(8, 5))
+plt.bar(year_avg.index, year_avg['sunshine'])
+plt.title('Sunshine length per year in London')
+plt.xlabel('Year')
+plt.ylabel('Sunshine length')
+plt.show()
+
+#Days of snow - per year
+
+#Adding column for snow visualisation
+snow_threshold = 0.0
+data['snow_day'] =  np.where(data['snow_depth'] > snow_threshold, 1, 0)
+snow_year_avg = data['snow_day'].groupby(data['date'].dt.year).sum()
+
+#Snow
+plt.figure(figsize=(8, 5))
+plt.bar(year_avg.index, snow_year_avg)
+plt.title('Number of days of snow per year in London')
+plt.xlabel('Year')
+plt.ylabel('Snow days')
 plt.show()
